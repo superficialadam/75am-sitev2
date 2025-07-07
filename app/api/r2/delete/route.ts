@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DeleteObjectCommand } from "@aws-sdk/client-s3"
-import { r2Client, R2_BUCKET_NAME } from '@/lib/r2'
+import { r2Client, R2_BUCKET_NAME, isR2Configured } from '@/lib/r2'
 import { auth } from "@/auth"
 
 export async function DELETE(request: NextRequest) {
@@ -9,6 +9,14 @@ export async function DELETE(request: NextRequest) {
     const session = await auth()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Check if R2 is properly configured
+    if (!isR2Configured() || !r2Client) {
+      return NextResponse.json({ 
+        error: 'R2 storage not configured', 
+        details: 'Missing environment variables or client initialization failed'
+      }, { status: 500 })
     }
 
     const { searchParams } = new URL(request.url)
