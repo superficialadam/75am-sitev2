@@ -52,7 +52,8 @@ export const config = {
     })
   ],
   session: {
-    strategy: "jwt"
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   pages: {
     signIn: "/auth/signin",
@@ -70,7 +71,9 @@ export const config = {
       }
       return session
     }
-  }
+  },
+  debug: process.env.NODE_ENV === "development",
+  trustHost: true, // Important for production deployment
 } satisfies NextAuthConfig
 
 export const { handlers, signIn, signOut, auth } = NextAuth(config) 

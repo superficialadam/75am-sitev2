@@ -4,20 +4,33 @@ import { NextResponse } from "next/server"
 export default auth((req) => {
   const { pathname } = req.nextUrl
   
-  // Public routes that don't require authentication
-  const publicRoutes = ['/auth/signin', '/auth/register', '/']
+  // Routes that should be completely public (no redirect)
+  const publicRoutes = [
+    '/',
+    '/auth/signin', 
+    '/auth/register',
+    '/api/auth/register',
+    '/debug'
+  ]
   
   // Check if the current path is public
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+  const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route))
+  
+  // Always allow access to NextAuth internal routes
+  if (pathname.startsWith('/api/auth/')) {
+    return NextResponse.next()
+  }
   
   // If user is not authenticated and trying to access protected route
   if (!req.auth && !isPublicRoute) {
-    return NextResponse.redirect(new URL('/auth/signin', req.url))
+    const signInUrl = new URL('/auth/signin', req.url)
+    return NextResponse.redirect(signInUrl)
   }
   
   // If user is authenticated and trying to access auth pages, redirect to dashboard
-  if (req.auth && (pathname.startsWith('/auth'))) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
+  if (req.auth && (pathname === '/auth/signin' || pathname === '/auth/register')) {
+    const dashboardUrl = new URL('/dashboard', req.url)
+    return NextResponse.redirect(dashboardUrl)
   }
   
   return NextResponse.next()
@@ -25,7 +38,14 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    // Match all paths except static files and API routes
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api/auth (NextAuth.js routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder files
+     */
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.gif$|.*\\.svg$).*)',
   ]
 } 
