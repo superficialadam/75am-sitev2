@@ -13,6 +13,13 @@ export default auth((req) => {
     '/debug'
   ]
   
+  // Protected routes that require authentication but don't redirect
+  const protectedRoutes = [
+    '/dashboard',
+    '/admin', 
+    '/r2-test'
+  ]
+  
   // Check if the current path is public
   const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route))
   

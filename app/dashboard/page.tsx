@@ -72,6 +72,12 @@ export default async function Dashboard() {
               🎨 Drawing Board
             </Link>
             <Link 
+              href="/r2-test"
+              className="block w-full p-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-center"
+            >
+              ☁️ R2 Storage Test
+            </Link>
+            <Link 
               href="/debug"
               className="block w-full p-2 bg-green-500 text-white rounded hover:bg-green-600 text-center"
             >
