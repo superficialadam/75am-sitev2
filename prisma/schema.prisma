@@ -56,6 +56,11 @@ model User {
   
   accounts Account[]
   sessions Session[]
+  
+  // Canvas relations
+  canvases      Canvas[]
+  sharedCanvases CanvasShare[] @relation("SharedCanvases")
+  createdShares  CanvasShare[] @relation("CreatedShares")
 
   @@map("users")
 }
@@ -67,4 +72,70 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verificationtokens")
+}
+
+// Canvas persistence models
+model Canvas {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  name         String    @db.VarChar(255)
+  description  String?
+  documentData Json      @map("document_data") // tldraw document snapshot
+  sessionData  Json?     @map("session_data")  // tldraw session snapshot
+  thumbnailUrl String?   @map("thumbnail_url")
+  isPublic     Boolean   @default(false) @map("is_public")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  version      Int       @default(1)
+
+  // Relations
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets CanvasAsset[]
+  shares CanvasShare[]
+
+  @@index([userId])
+  @@index([updatedAt(sort: Desc)])
+  @@map("canvases")
+}
+
+model CanvasAsset {
+  id        String   @id @default(uuid())
+  canvasId  String   @map("canvas_id")
+  assetId   String   @map("asset_id") // tldraw asset ID
+  r2Key     String   @map("r2_key")   // R2 storage key
+  publicUrl String   @map("public_url")
+  fileName  String   @map("file_name")
+  fileType  String   @map("file_type")
+  fileSize  BigInt   @map("file_size")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  canvas Canvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+
+  @@index([canvasId])
+  @@map("canvas_assets")
+}
+
+enum PermissionLevel {
+  VIEW
+  EDIT
+  ADMIN
+}
+
+model CanvasShare {
+  id              String          @id @default(uuid())
+  canvasId        String          @map("canvas_id")
+  userId          String?         @map("user_id")
+  permissionLevel PermissionLevel @map("permission_level")
+  sharedBy        String          @map("shared_by")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  canvas    Canvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  user      User?  @relation("SharedCanvases", fields: [userId], references: [id], onDelete: Cascade)
+  sharedByUser User @relation("CreatedShares", fields: [sharedBy], references: [id])
+
+  @@unique([canvasId, userId])
+  @@index([canvasId])
+  @@map("canvas_shares")
 }
