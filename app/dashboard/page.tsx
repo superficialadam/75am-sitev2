@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
 import { SignOutButton } from "@/components/SignOutButton"
+import Link from "next/link"
 
 export default async function Dashboard() {
   const session = await auth()
@@ -37,7 +38,7 @@ export default async function Dashboard() {
         <SignOutButton />
       </div>
       
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <div className="p-6 border rounded-lg">
           <h2 className="text-xl font-semibold mb-4">Profile Information</h2>
           <div className="space-y-2">
@@ -58,6 +59,24 @@ export default async function Dashboard() {
             <button className="w-full p-2 bg-gray-500 text-white rounded hover:bg-gray-600">
               Change Password
             </button>
+          </div>
+        </div>
+
+        <div className="p-6 border rounded-lg">
+          <h2 className="text-xl font-semibold mb-4">Admin Tools</h2>
+          <div className="space-y-4">
+            <Link 
+              href="/admin"
+              className="block w-full p-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-center"
+            >
+              🎨 Drawing Board
+            </Link>
+            <Link 
+              href="/debug"
+              className="block w-full p-2 bg-green-500 text-white rounded hover:bg-green-600 text-center"
+            >
+              🐛 Debug Info
+            </Link>
           </div>
         </div>
       </div>
