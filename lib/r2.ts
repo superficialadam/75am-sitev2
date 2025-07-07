@@ -2,10 +2,10 @@ import { S3Client } from "@aws-sdk/client-s3"
 
 // Function to create R2 client with proper error handling
 function createR2Client() {
-  const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID
-  const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY
-  const endpoint = process.env.CLOUDFLARE_R2_ENDPOINT
-  const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
+  const endpoint = process.env.R2_ENDPOINT
+  const bucketName = process.env.R2_BUCKET_NAME
 
   console.log('R2 Config Check:', {
     hasAccessKey: !!accessKeyId,
@@ -17,10 +17,10 @@ function createR2Client() {
 
   if (!accessKeyId || !secretAccessKey || !endpoint || !bucketName) {
     console.error('Missing R2 environment variables:', {
-      CLOUDFLARE_R2_ACCESS_KEY_ID: !!accessKeyId,
-      CLOUDFLARE_R2_SECRET_ACCESS_KEY: !!secretAccessKey,
-      CLOUDFLARE_R2_ENDPOINT: !!endpoint,
-      CLOUDFLARE_R2_BUCKET_NAME: !!bucketName
+      R2_ACCESS_KEY_ID: !!accessKeyId,
+      R2_SECRET_ACCESS_KEY: !!secretAccessKey,
+      R2_ENDPOINT: !!endpoint,
+      R2_BUCKET_NAME: !!bucketName
     })
     return null
   }
@@ -45,7 +45,7 @@ function createR2Client() {
 }
 
 export const r2Client = createR2Client()
-export const R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME
+export const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME
 
 // Helper function to check if R2 is properly configured
 export function isR2Configured(): boolean {
