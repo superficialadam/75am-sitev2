@@ -1,9 +1,13 @@
-import { TldrawWrapper } from '../../components/TldrawWrapper'
+import { auth } from '../../auth'
+import { redirect } from 'next/navigation'
+import CanvasManager from './CanvasManager'
 
-export default function CanvasPage() {
-  return (
-    <div>
-      <TldrawWrapper />
-    </div>
-  )
+export default async function CanvasPage() {
+  const session = await auth()
+  
+  if (!session?.user) {
+    redirect('/auth/signin')
+  }
+
+  return <CanvasManager />
 } 
