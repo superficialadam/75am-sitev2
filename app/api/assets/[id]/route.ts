@@ -7,12 +7,8 @@ import {
 } from '../../../../lib/assets'
 import type { APIError, APISuccess } from '../../../../types/tldraw'
 
-interface RouteParams {
-  params: { id: string }
-}
-
 // DELETE /api/assets/[id] - Delete asset
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -22,7 +18,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const assetId = params.id
+    const { id: assetId } = await params
     if (!assetId) {
       return NextResponse.json(
         { error: 'Asset ID is required', code: 'VALIDATION_ERROR' } as APIError,
@@ -57,7 +53,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 }
 
 // GET /api/assets/[id] - Get asset download URL
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -67,7 +63,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const assetId = params.id
+    const { id: assetId } = await params
     if (!assetId) {
       return NextResponse.json(
         { error: 'Asset ID is required', code: 'VALIDATION_ERROR' } as APIError,

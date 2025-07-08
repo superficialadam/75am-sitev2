@@ -8,12 +8,8 @@ import {
 } from '../../../../lib/canvas'
 import type { APIError, APISuccess, SaveCanvasRequest } from '../../../../types/tldraw'
 
-interface RouteParams {
-  params: { id: string }
-}
-
-// GET /api/canvas/[id] - Get specific canvas
-export async function GET(request: NextRequest, { params }: RouteParams) {
+// GET /api/canvas/[id] - Load canvas
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -23,7 +19,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const canvasId = params.id
+    const { id: canvasId } = await params
     if (!canvasId) {
       return NextResponse.json(
         { error: 'Canvas ID is required', code: 'VALIDATION_ERROR' } as APIError,
@@ -58,8 +54,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PUT /api/canvas/[id] - Update/save canvas
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+// PUT /api/canvas/[id] - Save canvas
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -69,7 +65,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const canvasId = params.id
+    const { id: canvasId } = await params
     if (!canvasId) {
       return NextResponse.json(
         { error: 'Canvas ID is required', code: 'VALIDATION_ERROR' } as APIError,
@@ -77,28 +73,28 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const body: SaveCanvasRequest = await request.json()
-    const { document, session: sessionData, name, description } = body
-
-    if (!document || typeof document !== 'object') {
+    const body = await request.json() as SaveCanvasRequest
+    
+    // Validate required fields
+    if (!body.document) {
       return NextResponse.json(
-        { error: 'Canvas document is required', code: 'VALIDATION_ERROR' } as APIError,
+        { error: 'Document data is required', code: 'VALIDATION_ERROR' } as APIError,
         { status: 400 }
       )
     }
 
-    const updatedCanvas = await saveCanvas(
-      session.user.id,
-      canvasId,
-      document,
-      sessionData,
-      name,
-      description
+    const canvas = await saveCanvas(
+      session.user.id, 
+      canvasId, 
+      body.document,
+      body.session,
+      body.name,
+      body.description
     )
 
     return NextResponse.json({
       success: true,
-      data: updatedCanvas,
+      data: canvas,
       message: 'Canvas saved successfully'
     } as APISuccess, { status: 200 })
 
@@ -122,7 +118,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 // DELETE /api/canvas/[id] - Delete canvas
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -132,7 +128,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const canvasId = params.id
+    const { id: canvasId } = await params
     if (!canvasId) {
       return NextResponse.json(
         { error: 'Canvas ID is required', code: 'VALIDATION_ERROR' } as APIError,

@@ -6,12 +6,8 @@ import {
 } from '../../../../../lib/assets'
 import type { APIError, APISuccess } from '../../../../../types/tldraw'
 
-interface RouteParams {
-  params: { id: string }
-}
-
-// GET /api/assets/canvas/[id] - List assets for a canvas
-export async function GET(request: NextRequest, { params }: RouteParams) {
+// GET /api/assets/canvas/[id] - List assets for canvas
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -21,7 +17,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const canvasId = params.id
+    const { id: canvasId } = await params
     if (!canvasId) {
       return NextResponse.json(
         { error: 'Canvas ID is required', code: 'VALIDATION_ERROR' } as APIError,
@@ -34,7 +30,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       success: true,
       data: assets,
-      message: `Found ${assets.length} assets for canvas`
+      message: 'Assets retrieved successfully'
     } as APISuccess, { status: 200 })
 
   } catch (error) {

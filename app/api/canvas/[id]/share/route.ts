@@ -8,12 +8,8 @@ import {
 } from '../../../../../lib/canvas'
 import type { APIError, APISuccess, PermissionLevel } from '../../../../../types/tldraw'
 
-interface RouteParams {
-  params: { id: string }
-}
-
 // POST /api/canvas/[id]/share - Share canvas with user
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -23,7 +19,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const canvasId = params.id
+    const { id: canvasId } = await params
     if (!canvasId) {
       return NextResponse.json(
         { error: 'Canvas ID is required', code: 'VALIDATION_ERROR' } as APIError,
@@ -34,26 +30,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const body = await request.json()
     const { targetUserId, permissionLevel } = body
 
-    if (!targetUserId || typeof targetUserId !== 'string') {
+    if (!targetUserId || !permissionLevel) {
       return NextResponse.json(
-        { error: 'Target user ID is required', code: 'VALIDATION_ERROR' } as APIError,
+        { error: 'Target user ID and permission level are required', code: 'VALIDATION_ERROR' } as APIError,
         { status: 400 }
       )
     }
 
-    if (!permissionLevel || !['VIEW', 'EDIT', 'ADMIN'].includes(permissionLevel)) {
+    if (!['VIEW', 'EDIT', 'ADMIN'].includes(permissionLevel)) {
       return NextResponse.json(
-        { error: 'Valid permission level is required (VIEW, EDIT, ADMIN)', code: 'VALIDATION_ERROR' } as APIError,
+        { error: 'Invalid permission level', code: 'VALIDATION_ERROR' } as APIError,
         { status: 400 }
       )
     }
 
-    const share = await shareCanvas(
-      session.user.id,
-      canvasId,
-      targetUserId,
-      permissionLevel as PermissionLevel
-    )
+    const share = await shareCanvas(session.user.id, canvasId, targetUserId, permissionLevel)
 
     return NextResponse.json({
       success: true,
@@ -81,7 +72,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 }
 
 // DELETE /api/canvas/[id]/share - Remove canvas share
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -91,7 +82,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const canvasId = params.id
+    const { id: canvasId } = await params
     if (!canvasId) {
       return NextResponse.json(
         { error: 'Canvas ID is required', code: 'VALIDATION_ERROR' } as APIError,
@@ -104,7 +95,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     if (!targetUserId) {
       return NextResponse.json(
-        { error: 'Target user ID is required as query parameter', code: 'VALIDATION_ERROR' } as APIError,
+        { error: 'User ID is required', code: 'VALIDATION_ERROR' } as APIError,
         { status: 400 }
       )
     }
@@ -135,8 +126,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// GET /api/canvas/[id]/share - Get canvas shares (for owners)
-export async function GET(request: NextRequest, { params }: RouteParams) {
+// GET /api/canvas/[id]/share - Get canvas shares
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
@@ -146,7 +137,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const canvasId = params.id
+    const { id: canvasId } = await params
     if (!canvasId) {
       return NextResponse.json(
         { error: 'Canvas ID is required', code: 'VALIDATION_ERROR' } as APIError,
@@ -159,7 +150,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       success: true,
       data: shares,
-      message: `Found ${shares.length} canvas shares`
+      message: 'Canvas shares retrieved successfully'
     } as APISuccess, { status: 200 })
 
   } catch (error) {
