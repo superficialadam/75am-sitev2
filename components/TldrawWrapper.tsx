@@ -6,10 +6,9 @@ import 'tldraw/tldraw.css'
 
 interface TldrawWrapperProps {
   canvasId?: string
-  isReadOnly?: boolean
 }
 
-export function TldrawWrapper({ canvasId, isReadOnly = false }: TldrawWrapperProps) {
+export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
   const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }))
   const [isLoading, setIsLoading] = useState(!!canvasId)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | null>(null)
@@ -81,7 +80,7 @@ export function TldrawWrapper({ canvasId, isReadOnly = false }: TldrawWrapperPro
 
   // Auto-save functionality
   useEffect(() => {
-    if (!editor || isReadOnly) return
+    if (!editor) return
 
     let timeoutId: NodeJS.Timeout
 
@@ -138,7 +137,7 @@ export function TldrawWrapper({ canvasId, isReadOnly = false }: TldrawWrapperPro
       unsubscribe()
       clearTimeout(timeoutId)
     }
-  }, [editor, canvasId, isReadOnly, store, storageKey])
+  }, [editor, canvasId, store, storageKey])
 
   const handleMount = useCallback((editor: Editor) => {
     setEditor(editor)
@@ -247,6 +246,22 @@ export function TldrawWrapper({ canvasId, isReadOnly = false }: TldrawWrapperPro
         color: 'white'
       }}>
         {canvasId ? `Server Canvas: ${canvasId}` : 'Local Canvas'}
+      </div>
+
+      {/* File drop zone notice */}
+      <div style={{
+        position: 'absolute',
+        bottom: 16,
+        right: 16,
+        zIndex: 1000,
+        padding: '6px 10px',
+        borderRadius: '4px',
+        fontSize: '12px',
+        backgroundColor: 'rgba(34, 197, 94, 0.9)',
+        color: 'white',
+        opacity: canvasId ? 1 : 0.6
+      }}>
+        {canvasId ? '📎 Files & images supported' : '📎 File uploads require server canvas'}
       </div>
 
       <Tldraw 
