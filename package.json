@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "railway run node scripts/dev-local.js dev",
+    "dev:local": "railway run node scripts/dev-local.js dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:generate": "railway run node scripts/dev-local.js db:generate",
+    "db:push": "railway run node scripts/dev-local.js db:push",
+    "db:studio": "railway run node scripts/dev-local.js db:studio"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",

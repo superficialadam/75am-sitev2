@@ -9,14 +9,6 @@ import type { APIError, APISuccess, UploadRequest } from '../../../../types/tldr
 // POST /api/assets/upload - Request presigned upload URL
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' } as APIError,
-        { status: 401 }
-      )
-    }
-
     const body = await request.json()
     const { canvasId, fileName, fileType, fileSize } = body
 
@@ -49,6 +41,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Only require auth for non-local canvases
+    let userId: string | undefined = undefined
+    if (canvasId !== 'local' && canvasId !== 'anonymous') {
+      const session = await auth()
+      if (!session?.user?.id) {
+        return NextResponse.json(
+          { error: 'Unauthorized' } as APIError,
+          { status: 401 }
+        )
+      }
+      userId = session.user.id
+    }
+
     const uploadRequest: UploadRequest = {
       fileName,
       fileType,
@@ -56,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const uploadResponse = await requestAssetUpload(
-      session.user.id,
+      userId || 'anonymous',
       canvasId,
       uploadRequest
     )
