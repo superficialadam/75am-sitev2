@@ -1,7 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useState } from 'react'
-import { Tldraw, createTLStore, defaultShapeUtils, defaultTools, loadSnapshot, Editor } from 'tldraw'
+import { 
+  Tldraw, 
+  createTLStore, 
+  defaultShapeUtils, 
+  defaultTools, 
+  loadSnapshot, 
+  Editor,
+  TLAsset,
+  AssetRecordType
+} from 'tldraw'
 import 'tldraw/tldraw.css'
 
 interface TldrawWrapperProps {
@@ -16,67 +25,235 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
   const [error, setError] = useState<string | null>(null)
 
   // Generate storage key for local canvas
-  const storageKey = 'tldraw-local-canvas'
+  const storageKey = `tldraw-canvas-${canvasId || 'local'}`
 
-  // Load canvas data on mount
-  useEffect(() => {
-    const loadCanvas = async () => {
+  // Load canvas from server or local storage
+  const loadCanvas = useCallback(async () => {
+    if (!canvasId) {
+      // Load from localStorage for local canvas
       try {
-        setIsLoading(true)
-        setError(null)
-
-        if (canvasId) {
-          // Load from API for specific canvas
-          console.log(`Loading canvas ${canvasId} from server...`)
-          const response = await fetch(`/api/canvas/${canvasId}`)
-          
-          if (!response.ok) {
-            if (response.status === 404) {
-              throw new Error('Canvas not found')
-            } else if (response.status === 403) {
-              throw new Error('You do not have permission to access this canvas')
-            } else {
-              throw new Error('Failed to load canvas from server')
-            }
-          }
-
-          const result = await response.json()
-          console.log('Loaded canvas from API:', result)
-          
-          if (result.success && result.data.document) {
-            // Load the document data into the store
-            const snapshot = {
-              store: result.data.document,
-              schema: store.schema.serialize()
-            }
-            loadSnapshot(store, snapshot)
-            console.log('Canvas loaded successfully from server')
-          }
-        } else {
-          // Load from local storage for anonymous canvas
-          const savedData = localStorage.getItem(storageKey)
-          if (savedData) {
-            try {
-              const snapshot = JSON.parse(savedData)
-              loadSnapshot(store, snapshot)
-              console.log('Canvas loaded from local storage')
-            } catch (error) {
-              console.error('Error parsing saved canvas data:', error)
-              localStorage.removeItem(storageKey) // Clear corrupted data
-            }
-          }
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
+          const data = JSON.parse(saved)
+          loadSnapshot(store, data)
         }
       } catch (error) {
-        console.error('Error loading canvas:', error)
-        setError(error instanceof Error ? error.message : 'Failed to load canvas')
+        console.warn('Failed to load local canvas:', error)
+      }
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/canvas/${canvasId}`)
+      
+      if (response.ok) {
+        const { data } = await response.json()
+        if (data.document) {
+          loadSnapshot(store, data.document)
+        }
+      } else {
+        console.warn('Failed to load canvas from server')
+      }
+    } catch (error) {
+      console.error('Error loading canvas:', error)
+      setError('Failed to load canvas')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [canvasId, store, storageKey])
+
+  // Save canvas to server or local storage
+  const saveCanvas = useCallback(async () => {
+    if (!editor) return
+
+    try {
+      setSaveStatus('saving')
+      const snapshot = editor.store.getSnapshot()
+
+      if (!canvasId) {
+        // Save to localStorage for local canvas
+        localStorage.setItem(storageKey, JSON.stringify(snapshot))
+        setSaveStatus('saved')
+        return
+      }
+
+      // Save to server
+      const response = await fetch(`/api/canvas/${canvasId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document: snapshot })
+      })
+
+      if (response.ok) {
+        setSaveStatus('saved')
+        setError(null)
+      } else {
         setSaveStatus('error')
-      } finally {
-        setIsLoading(false)
+        setError('Failed to save to server')
+      }
+    } catch (error) {
+      console.error('Save error:', error)
+      setSaveStatus('error')
+      setError('Save failed')
+    }
+
+    // Clear status after 3 seconds
+    setTimeout(() => setSaveStatus(null), 3000)
+  }, [editor, canvasId, storageKey])
+
+  // Upload file to R2 and return URL
+  const uploadFileToR2 = useCallback(async (file: File): Promise<string> => {
+    const targetCanvasId = canvasId || 'anonymous'
+    
+    try {
+      // Step 1: Request upload URL
+      const uploadResponse = await fetch('/api/assets/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          canvasId: targetCanvasId,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size
+        })
+      })
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to request upload URL')
+      }
+
+      const { data: uploadData } = await uploadResponse.json()
+      
+      // Step 2: Upload to R2 using presigned URL
+      const formData = new FormData()
+      
+      // Add presigned post fields
+      Object.entries(uploadData.fields || {}).forEach(([key, value]) => {
+        formData.append(key, value as string)
+      })
+      
+      // Add file last
+      formData.append('file', file)
+
+      const uploadToR2Response = await fetch(uploadData.url, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!uploadToR2Response.ok) {
+        throw new Error('Failed to upload to R2 storage')
+      }
+
+      console.log('✅ File uploaded to R2:', uploadData.publicUrl)
+      return uploadData.publicUrl
+      
+    } catch (error) {
+      console.error('❌ Upload to R2 failed:', error)
+      throw error
+    }
+  }, [canvasId])
+
+  // Handle file drops
+  const handleFileDrop = useCallback(async (files: File[]) => {
+    if (!editor) return
+
+    for (const file of files) {
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        try {
+          console.log('🔄 Uploading file to R2:', file.name)
+          
+          // Show uploading status
+          setSaveStatus('saving')
+          
+          // Upload to R2
+          const publicUrl = await uploadFileToR2(file)
+          
+          // Create asset using correct tldraw API
+          const assetId = AssetRecordType.createId()
+          
+          // Create asset record in tldraw store
+          const asset: TLAsset = AssetRecordType.create({
+            id: assetId,
+            type: file.type.startsWith('image/') ? 'image' : 'video',
+            typeName: 'asset',
+            props: {
+              name: file.name,
+              src: publicUrl,
+              w: 0, // Will be set when image loads
+              h: 0,
+              mimeType: file.type,
+              isAnimated: false
+            },
+            meta: {}
+          })
+
+          // Add asset to store
+          editor.createAssets([asset])
+
+          // Create shape with the asset
+          const shapeId = editor.createShape({
+            type: file.type.startsWith('image/') ? 'image' : 'video',
+            x: 100, // Default position
+            y: 100,
+            props: {
+              assetId: asset.id,
+              w: 200, // Default width
+              h: 200  // Default height
+            }
+          })
+
+          setSaveStatus('saved')
+          setTimeout(() => setSaveStatus(null), 2000)
+          
+        } catch (error) {
+          console.error('Failed to handle file upload:', error)
+          setSaveStatus('error')
+          setError('Failed to upload file')
+          setTimeout(() => {
+            setSaveStatus(null)
+            setError(null)
+          }, 3000)
+        }
+      }
+    }
+  }, [editor, uploadFileToR2])
+
+  // Handle editor mount
+  const handleMount = useCallback((mountedEditor: Editor) => {
+    setEditor(mountedEditor)
+
+    // Set up file drop handling
+    const container = mountedEditor.getContainer()
+    
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault()
+      e.dataTransfer!.dropEffect = 'copy'
+    }
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault()
+      const files = Array.from(e.dataTransfer?.files || [])
+      if (files.length > 0) {
+        handleFileDrop(files)
       }
     }
 
+    container.addEventListener('dragover', handleDragOver)
+    container.addEventListener('drop', handleDrop)
+
+    return () => {
+      container.removeEventListener('dragover', handleDragOver)
+      container.removeEventListener('drop', handleDrop)
+    }
+  }, [handleFileDrop])
+
+  // Load canvas on mount
+  useEffect(() => {
     loadCanvas()
-  }, [canvasId, store, storageKey])
+  }, [loadCanvas])
 
   // Auto-save functionality
   useEffect(() => {
@@ -84,64 +261,18 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
 
     let timeoutId: NodeJS.Timeout
 
-    const handleChange = () => {
+    const unsubscribe = editor.store.listen(() => {
       clearTimeout(timeoutId)
-      setSaveStatus('saving')
-      setError(null)
-      
-      timeoutId = setTimeout(async () => {
-        try {
-          const snapshot = store.getSnapshot()
-          
-          if (canvasId) {
-            // Save to API for specific canvas
-            console.log(`Saving canvas ${canvasId} to server...`)
-            const response = await fetch(`/api/canvas/${canvasId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                document: snapshot.store,
-                session: {} // We can add session data later if needed
-              })
-            })
+      timeoutId = setTimeout(() => {
+        saveCanvas()
+      }, 1000) // Debounce save by 1 second
+    })
 
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}))
-              throw new Error(errorData.error || 'Failed to save canvas to server')
-            }
-            
-            const result = await response.json()
-            console.log('Canvas saved to server:', result)
-          } else {
-            // Save to local storage for anonymous canvas
-            localStorage.setItem(storageKey, JSON.stringify(snapshot))
-            console.log('Canvas saved to local storage')
-          }
-          
-          setSaveStatus('saved')
-          
-          // Clear status after 3 seconds
-          setTimeout(() => setSaveStatus(null), 3000)
-        } catch (error) {
-          console.error('Error saving canvas:', error)
-          setError(error instanceof Error ? error.message : 'Failed to save canvas')
-          setSaveStatus('error')
-        }
-      }, 1000) // Debounce for 1 second
-    }
-
-    // Listen for store changes
-    const unsubscribe = store.listen(handleChange, { source: 'user', scope: 'document' })
-    
     return () => {
       unsubscribe()
       clearTimeout(timeoutId)
     }
   }, [editor, canvasId, store, storageKey])
-
-  const handleMount = useCallback((editor: Editor) => {
-    setEditor(editor)
-  }, [])
 
   if (isLoading) {
     return (
@@ -151,58 +282,13 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        background: '#fafafa'
+        backgroundColor: '#fafafa'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '18px', marginBottom: '8px' }}>
-            {canvasId ? 'Loading canvas...' : 'Loading local canvas...'}
-          </div>
+          <div style={{ fontSize: '18px', marginBottom: '8px' }}>Loading canvas...</div>
           <div style={{ fontSize: '14px', color: '#666' }}>
-            {canvasId ? `Canvas ID: ${canvasId}` : 'Stored locally in your browser'}
+            {canvasId ? `Canvas ID: ${canvasId}` : 'Local canvas'}
           </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div style={{ 
-        position: 'fixed', 
-        inset: 0, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: '#fafafa'
-      }}>
-        <div style={{ 
-          textAlign: 'center', 
-          padding: '32px',
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          maxWidth: '400px'
-        }}>
-          <div style={{ fontSize: '20px', marginBottom: '16px', color: '#dc2626' }}>
-            ⚠️ Error
-          </div>
-          <div style={{ fontSize: '16px', marginBottom: '24px', color: '#374151' }}>
-            {error}
-          </div>
-          <button
-            onClick={() => window.location.href = '/canvas'}
-            style={{
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              padding: '12px 24px',
-              borderRadius: '6px',
-              border: 'none',
-              fontSize: '16px',
-              cursor: 'pointer'
-            }}
-          >
-            Back to Canvas List
-          </button>
         </div>
       </div>
     )
@@ -228,7 +314,7 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
             error || saveStatus === 'error' ? '#ef4444' : '#6b7280'
         }}>
           {saveStatus === 'saved' && `✓ Saved${canvasId ? ' to server' : ' locally'}`}
-          {saveStatus === 'saving' && `⟳ Saving${canvasId ? ' to server' : ' locally'}...`}
+          {saveStatus === 'saving' && `⟳ ${canvasId ? 'Uploading to R2...' : 'Saving locally...'}`}
           {(error || saveStatus === 'error') && '✗ Save failed'}
         </div>
       )}
@@ -258,10 +344,9 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
         borderRadius: '4px',
         fontSize: '12px',
         backgroundColor: 'rgba(34, 197, 94, 0.9)',
-        color: 'white',
-        opacity: canvasId ? 1 : 0.6
+        color: 'white'
       }}>
-        {canvasId ? '📎 Files & images supported' : '📎 File uploads require server canvas'}
+        📎 Drag & drop images → R2 storage
       </div>
 
       <Tldraw 
