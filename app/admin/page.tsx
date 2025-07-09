@@ -28,7 +28,7 @@ export default async function AdminPage() {
       </header>
       
       <div className="flex-1 relative">
-        <TldrawWrapper />
+        <TldrawWrapper canvasId="admin" />
       </div>
     </div>
   )
