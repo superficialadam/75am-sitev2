@@ -13,7 +13,6 @@ import {
   createShapesForAssets
 } from 'tldraw'
 import 'tldraw/tldraw.css'
-import { TldrawAssetHandler } from './TldrawAssetHandler'
 
 interface TldrawWrapperProps {
   canvasId: string
@@ -27,8 +26,7 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
   const [saveStatus, setSaveStatus] = useState<
     'saving' | 'saved' | 'error' | null
   >(null)
-  const [assetHandler, setAssetHandler] = useState<TldrawAssetHandler | null>(null)
-
+  
   // Generate storage key for local canvas
   const storageKey = `tldraw-canvas-${canvasId || 'local'}`
 
@@ -51,7 +49,7 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
 
     try {
       setLoading(true)
-      const response = await fetch(`/api/canvas/${canvasId}`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_URL}/api/canvas/${canvasId}`)
       
       if (response.ok) {
         const { data } = await response.json()
@@ -86,7 +84,7 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
       }
 
       // Save to server
-      const response = await fetch(`/api/canvas/${canvasId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_URL}/api/canvas/${canvasId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ document: snapshot })
@@ -136,7 +134,7 @@ export function TldrawWrapper({ canvasId }: TldrawWrapperProps) {
           try {
             setSaveStatus('saving')
             // Step 1: Request upload URL
-            const uploadResponse = await fetch('/api/assets/upload', {
+            const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_URL}/api/assets/upload`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
